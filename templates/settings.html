@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>設定 · Zoom Phone → Box</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c2430;
+      --muted: #5c6b7a;
+      --line: #d7dee6;
+      --paper: #f6f8fa;
+      --card: #fff;
+      --ok: #0f7b4a;
+      --warn: #9a6700;
+      --error: #b42318;
+      --accent: #0b5cab;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    .lead { color: var(--muted); margin-bottom: 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    label { display: block; font-weight: 650; margin: 12px 0 6px; }
+    input, textarea, select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+    }
+    ol.steps { margin: 0 0 12px; padding-left: 22px; }
+    ol.steps li { margin: 0 0 8px; }
+    button, .button {
+      appearance: none;
+      border: 0;
+      background: var(--accent);
+      color: white;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    button.secondary, .button.secondary { background: #e8eef5; color: var(--ink); }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .banner { padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; }
+    .banner.ok { background: #e7f6ee; color: var(--ok); }
+    .banner.error { background: #fdecea; color: var(--error); }
+    .banner.warn { background: #fff6de; color: var(--warn); }
+    .ok { color: var(--ok); font-weight: 650; }
+    .warn { color: var(--warn); font-weight: 650; }
+    .error { color: var(--error); font-weight: 650; }
+    .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+    h3 { font-size: 15px; margin: 16px 0 8px; }
+    button:disabled { background: #9fb3c8; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="/">ホームへ戻る</a></p>
+    <h1>設定</h1>
+    <p class="lead">Box への接続と、Zoom からの通知を受け取るための値をここで保存します。再起動は不要です。</p>
+
+    {% if flash %}
+      <div class="banner {{ flash.level }}">{{ flash.message }}</div>
+    {% endif %}
+
+    <section class="card">
+      <h2>Box</h2>
+      <p>Developer Console の Platform アプリで、次を済ませてから下の欄へ貼り付けます。</p>
+      <ol class="steps">
+        <li>「構成」のアプリアクセスレベルは「アプリアクセスのみ」のままにする。</li>
+        <li>「アプリケーションスコープ」→「コンテンツ操作」で、ファイルとフォルダの読み書きを有効にして「保存」する。</li>
+        <li>Client ID と Client Secret をコピーする。Enterprise ID は右上のアカウントアイコンからコピーする。</li>
+      </ol>
+      <p>Client Secret は <span class="{{ 'ok' if secret_set else 'warn' }}">{{ '保存済み' if secret_set else '未設定' }}</span>です。Box 接続は <span class="{{ 'ok' if box_connected else 'warn' }}">{{ '接続済み' if box_connected else '未接続' }}</span>です。</p>
+      <form method="post" action="/settings/box">
+        <input type="hidden" name="token" value="{{ token }}">
+        <label for="client-id">Client ID</label>
+        <input id="client-id" name="client_id" type="text" required spellcheck="false" value="{{ box.client_id }}">
+        <label for="client-secret">Client Secret</label>
+        <input id="client-secret" name="client_secret" type="password" autocomplete="new-password" spellcheck="false" placeholder="{{ '変更するときだけ入力' if secret_set else 'Developer Console の Client Secret' }}">
+        <p class="hint">保存済みの Secret は表示しません。空のまま保存すると、いまの値を維持します。</p>
+        <label for="enterprise-id">Enterprise ID</label>
+        <input id="enterprise-id" name="enterprise_id" type="text" required spellcheck="false" value="{{ box.enterprise_id }}" placeholder="数字の Enterprise ID">
+        <p class="hint">Developer Console 右上のアカウントアイコンから「Enterprise ID をコピー」できます。右の「アプリの詳細」を下まで開いたプロパティにもあります。</p>
+        <label for="parent-folder">保存先の親フォルダ ID</label>
+        <input id="parent-folder" name="parent_folder_id" type="text" required spellcheck="false" value="{{ box.parent_folder_id }}">
+        <p class="hint">0 はサービスアカウントのルートです。その中に「Zoom」フォルダを作ります。構成の「アプリケーションスコープ」→「コンテンツ操作」で、ファイルとフォルダの読み書きを有効にしてください。</p>
+        <div class="actions">
+          <button type="submit">Box の設定を保存</button>
+        </div>
+      </form>
+      {% if box_configured and not box_connected %}
+        <form method="post" action="/box/login">
+          <input type="hidden" name="token" value="{{ token }}">
+          <div class="actions">
+            <button type="submit">サービスアカウントで接続</button>
+          </div>
+        </form>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Box の共有ユーザー</h2>
+      <p>ここに入れたユーザーを「{{ root_name }}」フォルダのコラボレーターにします。招待されたユーザーの「すべてのファイル」の一番上に「{{ root_name }}」が表示され、録音・文字起こし・議事録・FAX を開けます。</p>
+      <form method="post" action="/settings/box-share">
+        <input type="hidden" name="token" value="{{ token }}">
+        <label for="share-emails">Box にログインするメールアドレス</label>
+        <textarea id="share-emails" name="emails" rows="4" spellcheck="false" placeholder="taro@example.co.jp">{{ share.emails | join('\n') }}</textarea>
+        <p class="hint">1 行に 1 件ずつ入力します。サービスアカウントからは社内ユーザーの一覧を取得できないため、メールアドレスで指定します。</p>
+        <label for="share-role">権限</label>
+        <select id="share-role" name="role">
+          {% for key, label in share_roles.items() %}
+            <option value="{{ key }}" {{ 'selected' if share.role == key else '' }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <p class="hint">閲覧者はプレビューとダウンロードができます。編集者はファイルの追加や変更もできます。</p>
+        <div class="actions">
+          <button type="submit" {{ '' if box_connected else 'disabled' }}>保存して共有</button>
+        </div>
+      </form>
+      {% if share_error %}
+        <p class="error">{{ share_error }}</p>
+      {% elif collaborators %}
+        <h3>いま共有しているユーザー</h3>
+        <ul>
+          {% for item in collaborators %}
+            <li>{{ item.name }} ({{ item.login }}) · {{ share_roles.get(item.role, item.role) }} · {{ '表示中' if item.status == 'accepted' else '招待の承認待ち' if item.status == 'pending' else item.status }}</li>
+          {% endfor %}
+        </ul>
+        <p class="hint">「招待の承認待ち」のユーザーは、Box から届く招待メールで承認すると表示されます。</p>
+      {% elif box_connected %}
+        <p class="warn">まだ誰とも共有していません。</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Zoom Webhook</h2>
+      <p>Zoom App Marketplace のアプリを開き、Feature に出ている Secret Token をここに保存します。Validate より先に保存してください。状態は <span class="{{ 'ok' if webhook_secret_set else 'warn' }}">{{ '保存済み' if webhook_secret_set else '未設定' }}</span>です。</p>
+      <form method="post" action="/settings/zoom-webhook">
+        <input type="hidden" name="token" value="{{ token }}">
+        <label for="webhook-secret">Secret Token</label>
+        <input id="webhook-secret" name="webhook_secret" type="password" autocomplete="new-password" spellcheck="false" placeholder="{{ '変更するときだけ入力' if webhook_secret_set else 'Zoom の Secret Token' }}">
+        <div class="actions">
+          <button type="submit">Webhook Secret を保存</button>
+          <a class="button secondary" href="/">戻る</a>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

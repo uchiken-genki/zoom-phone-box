@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zoom Phone → Box</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c2430;
+      --muted: #5c6b7a;
+      --line: #d7dee6;
+      --paper: #f6f8fa;
+      --card: #fff;
+      --ok: #0f7b4a;
+      --warn: #9a6700;
+      --error: #b42318;
+      --accent: #0b5cab;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    p { margin: 0 0 12px; }
+    .lead { color: var(--muted); margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px 18px 8px;
+      margin-bottom: 16px;
+    }
+    .status { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+    .status:first-of-type { border-top: 0; }
+    .ok { color: var(--ok); font-weight: 650; }
+    .warn { color: var(--warn); font-weight: 650; }
+    .error { color: var(--error); font-weight: 650; }
+    button, .button {
+      appearance: none;
+      border: 0;
+      background: var(--accent);
+      color: white;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.secondary { background: #e8eef5; color: var(--ink); }
+    a.button { display: inline-block; text-decoration: none; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+    code, .mono {
+      font-family: Consolas, "Source Code Pro", monospace;
+      font-size: 13px;
+    }
+    .url {
+      display: block;
+      padding: 10px 12px;
+      background: #eef3f8;
+      border-radius: 8px;
+      word-break: break-all;
+      margin-bottom: 12px;
+    }
+    .url-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 12px; }
+    .url-form input {
+      flex: 1 1 280px;
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+    }
+    .tree { margin: 0 0 12px; padding-left: 18px; }
+    h3 { font-size: 16px; margin: 4px 0 8px; }
+    ol.steps { margin: 0 0 12px; padding-left: 22px; }
+    ol.steps li { margin: 0 0 8px; }
+    ol.steps a { color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; vertical-align: top; padding: 8px 6px; border-top: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 650; }
+    .banner { padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; }
+    .banner.ok { background: #e7f6ee; color: var(--ok); }
+    .banner.error { background: #fdecea; color: var(--error); }
+    .banner.warn { background: #fff6de; color: var(--warn); }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Zoom Phone → Box</h1>
+    <p class="lead">録音、文字起こし、AI コンパニオンの議事録、受信 FAX を Box の「{{ root_name }}」フォルダへ振り分けて保存します。</p>
+
+    {% if flash %}
+      <div class="banner {{ flash.level }}">{{ flash.message }}</div>
+    {% endif %}
+    {% if not box_configured %}
+      <div class="banner warn">Box は未接続です。Client ID、Client Secret、Enterprise ID は <a href="/settings">設定画面</a> で入力できます。</div>
+    {% elif not box_connected %}
+      <div class="banner warn">Box のアプリ情報は保存済みです。「サービスアカウントで接続」を押してください。</div>
+    {% endif %}
+    {% if local_webhook %}
+      <div class="banner warn">いまの公開 URL はローカルです。<span class="mono">zoom_phone_box\start-ngrok.ps1</span> を実行すると、ngrok の URL がここに入ります。</div>
+    {% endif %}
+
+    <div class="grid">
+      <section class="card">
+        <h2>接続状態</h2>
+        <div class="status"><span>Zoom 認証情報</span><span class="{{ 'ok' if zoom_ready else 'error' }}">{{ '設定済み' if zoom_ready else '不足' }}</span></div>
+        <div class="status"><span>Webhook Secret Token</span><span class="{{ 'ok' if webhook_secret_ready else 'warn' }}">{{ '設定済み' if webhook_secret_ready else '未設定' }}</span></div>
+        <div class="status"><span>Box アプリ</span><span class="{{ 'ok' if box_configured else 'error' }}">{{ '接続情報は設定済み' if box_configured else 'Enterprise ID が未設定' }}</span></div>
+        <div class="status">
+          <span>Box 接続</span>
+          <span class="{{ 'ok' if box_connected else 'warn' }}">
+            {% if box_connected and box_user %}{{ box_user.name or box_user.login }}{% elif box_connected %}接続済み{% else %}未接続{% endif %}
+          </span>
+        </div>
+        <div class="actions">
+          <a class="button" href="/settings">設定</a>
+          <a class="button" href="/check">FAX を確認</a>
+          <form method="post" action="/zoom/check"><input type="hidden" name="token" value="{{ token }}"><button type="submit">Zoom を確認</button></form>
+          {% if box_configured and not box_connected %}
+            <form method="post" action="/box/login"><input type="hidden" name="token" value="{{ token }}"><button type="submit">サービスアカウントで接続</button></form>
+          {% endif %}
+          {% if box_connected %}
+            <form method="post" action="/box/check"><input type="hidden" name="token" value="{{ token }}"><button type="submit">Box を確認</button></form>
+            <form method="post" action="/box/folders"><input type="hidden" name="token" value="{{ token }}"><button type="submit">フォルダを作成</button></form>
+            <form method="post" action="/box/disconnect"><input type="hidden" name="token" value="{{ token }}"><button class="secondary" type="submit">切断</button></form>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>保存先</h2>
+        <ul class="tree">
+          <li>{{ root_name }}{% if folders.root %} <span class="mono">({{ folders.root }})</span>{% endif %}
+            <ul>
+              {% for kind, name in folder_names.items() %}
+                <li>{{ name }}{% if folders.get(kind) %} <span class="mono">({{ folders.get(kind) }})</span>{% endif %}</li>
+              {% endfor %}
+            </ul>
+          </li>
+        </ul>
+        <p>録音は「録音」、通話の文字起こしは「文字起こし」、会議と電話の AI 要約は「議事録」、受信 FAX は「FAX」に入ります。</p>
+        {% if folders.shared_url %}
+          <p>社内の Box ユーザーは、ログインした状態で次のリンクから確認できます。「すべてのファイル」に表示させるには、<a href="/settings">設定画面</a>の「Box の共有ユーザー」に登録します。</p>
+          <a class="url mono" href="{{ folders.shared_url }}">{{ folders.shared_url }}</a>
+        {% endif %}
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Zoom 側で行う設定</h2>
+      <p>Zoom App Marketplace の Server-to-Server OAuth アプリで、次の順に設定します。Secret Token をこのアプリへ保存してから Validate してください。</p>
+      <ol class="steps">
+        <li><a href="https://marketplace.zoom.us/">Zoom App Marketplace</a> の Develop → Manage から、この連携用のアプリを開く。</li>
+        <li>Scopes に、下の 5 つを追加する。</li>
+        <li>Feature に表示される Secret Token をコピーし、<a href="/settings">設定画面</a>の「Zoom Webhook」に保存する。</li>
+        <li>同じ Feature で Event Subscriptions をオンにし、方法は Webhook を選ぶ。Event notification endpoint URL に、下の Webhook URL を入れる。</li>
+        <li>Validate が成功したら、Add Events で下の 6 件を追加する。受信対象は All users in the account にして保存する。</li>
+        <li>Activation でアプリを有効化する。有効になったら、この画面の「Zoom を確認」でトークンが取得できる。</li>
+        <li>ngrok を起動し直して URL が変わったら、endpoint URL を新しい Webhook URL に差し替え、もう一度 Validate する。起動コマンドは <span class="mono">zoom_phone_box\start-ngrok.ps1</span>。</li>
+      </ol>
+      <h3>Scopes</h3>
+      <ul class="tree">
+        {% for scope in scopes %}
+          <li><span class="mono">{{ scope }}</span></li>
+        {% endfor %}
+      </ul>
+      <h3>購読するイベント</h3>
+      <ul class="tree">
+        {% for event in events %}
+          <li><span class="mono">{{ event }}</span></li>
+        {% endfor %}
+      </ul>
+      <h3>Webhook URL</h3>
+      <p>フリー版の ngrok は起動のたびに URL が変わります。{% if ngrok_local_port %}いまの転送先は localhost:{{ ngrok_local_port }} です。{% endif %}変わった URL は Zoom に登録し直してください。</p>
+      <form class="url-form" method="post" action="/settings/public-url">
+        <input type="hidden" name="token" value="{{ token }}">
+        <label class="mono" for="public-base-url">ngrok の URL</label>
+        <input id="public-base-url" name="public_base_url" type="text" required spellcheck="false" value="{{ public_base_url }}" placeholder="https://xxxx.ngrok-free.app">
+        <button type="submit">設定変更</button>
+      </form>
+      <span class="url mono">{{ webhook_url }}</span>
+    </section>
+
+    <section class="card">
+      <h2>Box 側で行う設定</h2>
+      <p>Developer Console の Platform アプリ（Client Credentials Grant）で設定します。ブラウザでログインするリダイレクト URI は使いません。保存先はサービスアカウントの Box です。</p>
+      <ol class="steps">
+        <li><a href="https://app.box.com/developers/console">Box Developer Console</a> で、この連携用のアプリの「構成」を開く。</li>
+        <li>アプリアクセスレベルは「アプリアクセスのみ」のままにする。</li>
+        <li>アプリケーションスコープの「コンテンツ操作」を開き、ファイルとフォルダの読み書きを有効にして、右上の「保存」を押す。</li>
+        <li>Client ID と Client Secret をコピーする。Enterprise ID は、Developer Console 右上のアカウントアイコンからコピーする。</li>
+        <li>3 つの値を<a href="/settings">設定画面</a>に入力して保存し、「サービスアカウントで接続」を押す。</li>
+        <li>この画面の「フォルダを作成」を押す。Zoom フォルダは社内のユーザーが開ける共有になる。リンクはホームの「保存先」に出る。</li>
+        <li><a href="/settings">設定画面</a>の「Box の共有ユーザー」にメールアドレスを入れて「保存して共有」を押す。そのユーザーの「すべてのファイル」に Zoom フォルダが表示される。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>最近の保存</h2>
+      <form method="post" action="/retry" class="actions">
+        <input type="hidden" name="token" value="{{ token }}">
+        <button class="secondary" type="submit">失敗分を再実行</button>
+      </form>
+      {% if activity %}
+        <table>
+          <thead><tr><th>時刻</th><th>結果</th><th>イベント</th><th>内容</th></tr></thead>
+          <tbody>
+            {% for item in activity %}
+              <tr>
+                <td class="mono">{{ item.time }}</td>
+                <td class="{{ 'ok' if item.status == 'saved' else ('error' if item.status == 'error' else 'warn') }}">{{ item.status }}</td>
+                <td class="mono">{{ item.event }}</td>
+                <td>{{ item.detail }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p>まだ保存履歴はありません。</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

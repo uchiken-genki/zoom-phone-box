@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FAX の確認 · Zoom Phone → Box</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c2430;
+      --muted: #5c6b7a;
+      --line: #d7dee6;
+      --paper: #f6f8fa;
+      --card: #fff;
+      --ok: #0f7b4a;
+      --warn: #9a6700;
+      --error: #b42318;
+      --accent: #0b5cab;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    .lead { color: var(--muted); margin-bottom: 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .url {
+      display: block;
+      padding: 10px 12px;
+      background: #eef3f8;
+      border-radius: 8px;
+      word-break: break-all;
+      margin-bottom: 12px;
+    }
+    .mono { font-family: Consolas, "Source Code Pro", monospace; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; vertical-align: top; padding: 8px 6px; border-top: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 650; }
+    button, input[type="number"] {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font: inherit;
+    }
+    button {
+      border: 0;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+    .banner { padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; }
+    .banner.ok { background: #e7f6ee; color: var(--ok); }
+    .banner.error { background: #fdecea; color: var(--error); }
+    .banner.warn { background: #fff6de; color: var(--warn); }
+    .ok { color: var(--ok); font-weight: 650; }
+    .warn { color: var(--warn); font-weight: 650; }
+    .error { color: var(--error); font-weight: 650; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="/">ホームへ戻る</a></p>
+    <h1>FAX の確認</h1>
+    <p class="lead">受信済みの FAX は、設定した間隔で Zoom から取得して Box の FAX フォルダへ転送します。Webhook が届いたときも同じ場所へ保存します。</p>
+
+    {% if flash %}
+      <div class="banner {{ flash.level }}">{{ flash.message }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="banner error">{{ error }}</div>
+    {% endif %}
+
+    <section class="card">
+      <h2>自動転送</h2>
+      <p>受信済みで未保存の FAX を {{ poll.interval }} 秒ごとに確認し、Box へ転送します。</p>
+      {% if poll.last_at %}
+        <p>最終確認: <span class="mono">{{ poll.last_at }}</span> · {{ poll.last_message }}</p>
+      {% else %}
+        <p class="hint">まだ自動確認は実行されていません。</p>
+      {% endif %}
+      <div class="row">
+        <form method="post" action="/check/refresh">
+          <input type="hidden" name="token" value="{{ token }}">
+          <button type="submit">更新</button>
+        </form>
+        <form class="row" method="post" action="/check/interval">
+          <input type="hidden" name="token" value="{{ token }}">
+          <label for="interval">間隔（秒）</label>
+          <input id="interval" name="interval" type="number" min="10" max="3600" required value="{{ poll.interval }}">
+          <button type="submit">間隔を保存</button>
+        </form>
+      </div>
+      <p class="hint">10 秒から 3600 秒まで指定できます。初期値は 30 秒です。</p>
+    </section>
+
+    <section class="card">
+      <h2>Webhook</h2>
+      <p>Zoom の Event Subscriptions に登録している URL と、次が同じか確認してください。</p>
+      <span class="url mono">{{ webhook_url }}</span>
+      {% if receipts %}
+        <table>
+          <thead><tr><th>時刻</th><th>イベント</th><th>内容</th></tr></thead>
+          <tbody>
+            {% for item in receipts %}
+              <tr>
+                <td class="mono">{{ item.time }}</td>
+                <td class="mono">{{ item.event }}</td>
+                <td>{{ item.detail }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="warn">このアプリは、まだ Zoom から Webhook を受け取っていません。メール通知だけが来ている状態です。</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Zoom の FAX 履歴</h2>
+      {% if rows %}
+        <table>
+          <thead><tr><th>時刻</th><th>方向</th><th>状態</th><th>送信元</th><th>送信先</th><th>Box</th></tr></thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td class="mono">{{ row.time }}</td>
+                <td>{{ row.direction }}</td>
+                <td>{{ row.status }}</td>
+                <td class="mono">{{ row.sender }}</td>
+                <td class="mono">{{ row.receiver }}</td>
+                <td>
+                  {% if row.saved %}
+                    <span class="ok">保存済み</span>
+                  {% elif row.can_save %}
+                    <form method="post" action="/check/save">
+                      <input type="hidden" name="token" value="{{ token }}">
+                      <input type="hidden" name="fax_log_id" value="{{ row.fax_log_id }}">
+                      <button type="submit">Box へ保存</button>
+                    </form>
+                  {% else %}
+                    <span class="warn">対象外</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p>Zoom の FAX 履歴は空です。</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>
